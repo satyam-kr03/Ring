@@ -1,3 +1,5 @@
+package manager
+
 import(
     "ring/task"
     "fmt"
