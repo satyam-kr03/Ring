@@ -1,17 +1,15 @@
 package main
  
 import (
-    "ring/node"
     "ring/task"
+    "ring/task/state"
     "fmt"
     "time"
-    "os"
  
     "github.com/golang-collections/collections/queue"
     "github.com/google/uuid"
     "github.com/docker/docker/client"
  
-    "ring/manager"
     "ring/worker"
 )
 
@@ -55,67 +53,36 @@ func stopContainer(d *task.Docker, id string) *task.DockerResult {
 }
  
 func main() {
-    t := task.Task{
-        ID:     uuid.New(),
-        Name:   "Task-1",
-        State:  task.Pending,
-        Image:  "Image-1",
-        Memory: 1024,
-        Disk:   1,
-    }
-
-	te := task.TaskEvent{
-        ID:        uuid.New(),
-        State:     task.Pending,
-        Timestamp: time.Now(),
-        Task:      t,
-    }
- 
-    fmt.Printf("task: %v\n", t)
-    fmt.Printf("task event: %v\n", te)
- 
+    db := make(map[uuid.UUID]*task.Task)
     w := worker.Worker{
-        Name: "worker-1",
         Queue: *queue.New(),
-        Db:    make(map[uuid.UUID]*task.Task),
-    }
-    fmt.Printf("worker: %v\n", w)
-    w.CollectStats()
-    w.RunTask()
-    w.StartTask()
-    w.StopTask()
- 
-    m := manager.Manager{
-        Pending: *queue.New(),
-        TaskDb:  make(map[string][]*task.Task),
-        EventDb: make(map[string][]*task.TaskEvent),
-        Workers: []string{w.Name},
+        Db:    db,
     }
  
-    fmt.Printf("manager: %v\n", m)
-    m.SelectWorker()
-    m.UpdateTasks()
-    m.SendWork()
- 
-    n := node.Node{
-        Name:   "Node-1",
-        Ip:     "192.168.1.1",
-        Cores:  4,
-        Memory: 1024,
-        Disk:   25,
-		Role:   "worker",
+    t := task.Task{
+        ID:    uuid.New(),
+        Name:  "test-container-1",
+        State: state.Scheduled,
+        Image: "strm/helloworld-http",
     }
  
-    fmt.Printf("node: %v\n", n)
+    fmt.Println("starting task")
+    w.AddTask(t)
+    result := w.RunTask()
+    if result.Error != nil {
+        panic(result.Error)
+    }
 
-    fmt.Printf("create a test container\n")
-    dockerTask, createResult := createContainer()
-    if createResult.Error != nil {
-        fmt.Printf("%v", createResult.Error)
-        os.Exit(1)
-    }
+    t.ContainerID = result.ContainerId
+    fmt.Printf("task %s is running in container %s\n", t.ID, t.ContainerID)
+    fmt.Println("Sleepy time")
+    time.Sleep(time.Second * 30)
  
-    time.Sleep(time.Second * 5)
-    fmt.Printf("stopping container %s\n", createResult.ContainerId)
-    _ = stopContainer(dockerTask, createResult.ContainerId)
+    fmt.Printf("stopping task %s\n", t.ID)
+    t.State = state.Completed
+    w.AddTask(t)
+    result = w.RunTask()
+    if result.Error != nil {
+        panic(result.Error)
+    }
 }

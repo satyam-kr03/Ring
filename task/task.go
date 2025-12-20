@@ -14,12 +14,14 @@ import (
     "github.com/docker/docker/api/types/image"
     "github.com/docker/docker/client"
     "github.com/docker/docker/pkg/stdcopy"
+
+    "ring/task/state"
 )
 
 type Task struct {
     ID            uuid.UUID
     Name          string
-    State         State
+    State         state.State
     Image         string
     Memory        int
     Disk          int
@@ -28,11 +30,12 @@ type Task struct {
     RestartPolicy string
     StartTime     time.Time
     FinishTime    time.Time
+    ContainerID   string
 }
 
 type TaskEvent struct {
     ID        uuid.UUID
-    State     State
+    State     state.State
     Timestamp time.Time
     Task      Task
 }
@@ -64,15 +67,30 @@ type DockerResult struct {
     Result      string
 }
 
-type State int
+func NewConfig(t *Task) Config {
+    return Config{
+        Name:          t.Name,
+        AttachStdin:   false,
+        AttachStdout:  false,
+        AttachStderr:  false,
+        ExposedPorts:  t.ExposedPorts,
+        Cmd:           []string{"sh", "-c", "while :; do sleep 1; done"},
+        Image:         t.Image,
+        Cpu:           0.5,
+        Memory:        int64(t.Memory),
+        Disk:          int64(t.Disk),
+        Env:           []string{},
+        RestartPolicy: t.RestartPolicy,
+    }
+}
 
-const (
-	Pending State = iota
-	Scheduled 
-	Running
-	Completed 
-	Failed
-)
+func NewDocker(c Config) *Docker {
+    d := &Docker{
+        Config: c,
+    }
+    d.Client, _ = client.NewClientWithOpts(client.FromEnv)
+    return d
+}
 
 /*
 The signature of the ContainerCreate method from the Docker client.
