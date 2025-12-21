@@ -1,14 +1,18 @@
 package main
  
 import (
+    "log"
+    "os"
+    "strconv"
     "ring/task"
-    "ring/task/state"
+    "ring/worker/api"
     "fmt"
     "time"
  
     "github.com/golang-collections/collections/queue"
     "github.com/google/uuid"
     "github.com/docker/docker/client"
+    "github.com/joho/godotenv"
  
     "ring/worker"
 )
@@ -51,38 +55,40 @@ func stopContainer(d *task.Docker, id string) *task.DockerResult {
         "Container %s has been stopped and removed\n", result.ContainerId)
     return &result
 }
+
+func runTasks(w *worker.Worker) {
+    for {
+        if w.Queue.Len() != 0 {
+            result := w.RunTask()
+            if result.Error != nil {
+                log.Printf("Error running task: %v\n", result.Error)
+            }
+        } else {
+            log.Printf("No tasks to process currently.\n")
+        }
+        log.Println("Sleeping for 10 seconds.")
+        time.Sleep(10 * time.Second)
+    }
+ 
+}
  
 func main() {
-    db := make(map[uuid.UUID]*task.Task)
+    err := godotenv.Load()
+    if err != nil {
+        log.Fatal("Error loading .env file")
+    }
+ 
+    host := os.Getenv("RING_HOST")
+    port, _ := strconv.Atoi(os.Getenv("RING_PORT"))
+ 
+    fmt.Println("Starting ring worker")
+ 
     w := worker.Worker{
         Queue: *queue.New(),
-        Db:    db,
+        Db:    make(map[uuid.UUID]*task.Task),
     }
+    api := api.Api{Address: host, Port: port, Worker: &w}
  
-    t := task.Task{
-        ID:    uuid.New(),
-        Name:  "test-container-1",
-        State: state.Scheduled,
-        Image: "strm/helloworld-http",
-    }
- 
-    fmt.Println("starting task")
-    w.AddTask(t)
-    result := w.RunTask()
-    if result.Error != nil {
-        panic(result.Error)
-    }
-
-    t.ContainerID = result.ContainerId
-    fmt.Printf("task %s is running in container %s\n", t.ID, t.ContainerID)
-    fmt.Println("Sleepy time")
-    time.Sleep(time.Second * 30)
- 
-    fmt.Printf("stopping task %s\n", t.ID)
-    t.State = state.Completed
-    w.AddTask(t)
-    result = w.RunTask()
-    if result.Error != nil {
-        panic(result.Error)
-    }
+    go runTasks(&w)
+    api.Start()
 }
