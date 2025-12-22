@@ -1,15 +1,15 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+    "ring/task"
+    "ring/worker"
+    "encoding/json"
+    "ring/task/state"
+    "github.com/google/uuid"	
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
-	"ring/task"
-	"ring/task/state"
-	"ring/worker"
 )
 
 type Api struct {
@@ -33,10 +33,14 @@ func (a *Api) initRouter() {
             r.Delete("/", a.StopTaskHandler)           
         })
     })
+    a.Router.Route("/stats", func(r chi.Router) {
+    r.Get("/", a.GetStatsHandler)
+    })
 }
 
 func (a *Api) Start() {
     a.initRouter()
+    log.Printf("Starting API server on %s:%d", a.Address, a.Port)
     http.ListenAndServe(fmt.Sprintf("%s:%d", a.Address, a.Port), a.Router)
 }
 
@@ -93,4 +97,10 @@ func (a *Api) StopTaskHandler(w http.ResponseWriter, r *http.Request) {
  
     log.Printf("Added task %v to stop container %v\n", taskToStop.ID, taskToStop.ContainerID)                                       
     w.WriteHeader(204)                                                   
+}
+
+func (a *Api) GetStatsHandler(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(200)
+    json.NewEncoder(w).Encode(a.Worker.Stats)
 }

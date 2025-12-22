@@ -10,6 +10,7 @@ import (
  
     "ring/task"
     "ring/task/state"
+    "ring/worker/stats"
 )
  
 type Worker struct {
@@ -17,11 +18,18 @@ type Worker struct {
     Queue     queue.Queue
     Db        map[uuid.UUID]*task.Task
     TaskCount int
+    Stats     *stats.Stats
 }
 
 func (w *Worker) CollectStats() {
-    fmt.Println("I will collect stats")
+    for {
+        log.Println("Collecting stats")
+        w.Stats = stats.GetStats()
+        w.Stats.TaskCount = w.TaskCount
+        time.Sleep(15 * time.Second)
+    }
 }
+
  
 func (w *Worker) RunTask() task.DockerResult {
     t := w.Queue.Dequeue()                          

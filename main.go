@@ -73,15 +73,16 @@ func runTasks(w *worker.Worker) {
 }
  
 func main() {
-    err := godotenv.Load()
+    err := godotenv.Load(".env")
     if err != nil {
-        log.Fatal("Error loading .env file")
+        log.Printf("Error loading .env: %v", err)
     }
- 
     host := os.Getenv("RING_HOST")
     port, _ := strconv.Atoi(os.Getenv("RING_PORT"))
  
-    fmt.Println("Starting ring worker")
+    log.Printf("Host: %s, Port: %d", host, port)
+ 
+    fmt.Println("Starting Ring worker")
  
     w := worker.Worker{
         Queue: *queue.New(),
@@ -90,5 +91,6 @@ func main() {
     api := api.Api{Address: host, Port: port, Worker: &w}
  
     go runTasks(&w)
+    go w.CollectStats()
     api.Start()
 }
