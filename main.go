@@ -6,6 +6,7 @@ import (
     "strconv"
     "ring/task"
     "ring/worker/api"
+    managerapi "ring/manager/api"
     "ring/task/state"
     "fmt"
     "time"
@@ -58,31 +59,30 @@ func stopContainer(d *task.Docker, id string) *task.DockerResult {
     return &result
 }
 
-func runTasks(w *worker.Worker) {
-    for {
-        if w.Queue.Len() != 0 {
-            result := w.RunTask()
-            if result.Error != nil {
-                log.Printf("Error running task: %v\n", result.Error)
-            }
-        } else {
-            log.Printf("No tasks to process currently.\n")
-        }
-        log.Println("Sleeping for 10 seconds.")
-        time.Sleep(10 * time.Second)
-    }
- 
-}
- 
 func main() {
     err := godotenv.Load(".env")
     if err != nil {
         log.Printf("Error loading .env: %v", err)
     }
-    host := os.Getenv("RING_HOST")
-    port, _ := strconv.Atoi(os.Getenv("RING_PORT"))
+    whost := os.Getenv("RING_WORKER_HOST")
+    if whost == "" {
+        whost = "localhost"
+    }
+    wport, _ := strconv.Atoi(os.Getenv("RING_WORKER_PORT"))
+    if wport == 0 {
+        wport = 5555
+    }
+
+    mhost := os.Getenv("RING_MANAGER_HOST")
+    if mhost == "" {
+        mhost = "localhost"
+    }
+    mport, _ := strconv.Atoi(os.Getenv("RING_MANAGER_PORT"))
+    if mport == 0 {
+        mport = 5556
+    }
  
-    log.Printf("Host: %s, Port: %d", host, port)
+    log.Printf("Host: %s, Port: %d", whost, wport)
  
     fmt.Println("Starting Ring worker")
  
@@ -90,14 +90,18 @@ func main() {
         Queue: *queue.New(),
         Db:    make(map[uuid.UUID]*task.Task),
     }
-    api := api.Api{Address: host, Port: port, Worker: &w}
+    wapi := api.Api{Address: whost, Port: wport, Worker: &w}
  
-    go runTasks(&w)
+    go worker.RunTasks(&w)
     go w.CollectStats()
-    go api.Start()
+    go wapi.Start()
 
-    workers := []string{fmt.Sprintf("%s:%d", host, port)}
+    workers := []string{fmt.Sprintf("%s:%d", whost, wport)}
     m := manager.New(workers)
+    mapi := managerapi.Api{Address: mhost, Port: mport, Manager: m}
+
+    go m.ProcessTasks();
+    go m.UpdateTasks();
 
     for i := 0; i < 3; i++ {
         t := task.Task{
@@ -114,6 +118,8 @@ func main() {
         m.AddTask(te)
         m.SendWork()
     }
+
+    mapi.Start()
 
     go func() {                                                       
         for {                                                         
