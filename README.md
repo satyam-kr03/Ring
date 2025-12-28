@@ -34,6 +34,8 @@ A distributed task orchestration system written in Go.
 
 ## Architecture
 
+![Diagram](media/ring.png)
+
 The orchestrator consists of the following components:
 
 - **Manager**: Acts as the central coordinator. It accepts task requests via its API ([manager/api/api.go](manager/api/api.go)), schedules tasks to workers using round-robin selection ([`manager.SelectWorker`](manager/manager.go)), and tracks task states in databases ([`manager.Manager.TaskDb`](manager/manager.go)). It periodically updates task statuses from workers.
