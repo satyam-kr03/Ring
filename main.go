@@ -7,7 +7,6 @@ import (
     "ring/task"
     "ring/worker/api"
     managerapi "ring/manager/api"
-    "ring/task/state"
     "fmt"
     "time"
 
@@ -102,22 +101,7 @@ func main() {
 
     go m.ProcessTasks();
     go m.UpdateTasks();
-
-    for i := 0; i < 3; i++ {
-        t := task.Task{
-            ID:    uuid.New(),
-            Name:  fmt.Sprintf("test-container-%d", i),
-            State: state.Scheduled,
-            Image: "strm/helloworld-http",
-        }
-        te := task.TaskEvent{
-            ID:    uuid.New(),
-            State: state.Running,
-            Task:  t,
-        }
-        m.AddTask(te)
-        m.SendWork()
-    }
+    go m.DoHealthChecks();
 
     mapi.Start()
 
